@@ -3,6 +3,14 @@ Mondrian Random Forest
 
 ## TODO
 
-* Nil -> Forest Instance
+* impl/test fit\_posterior\_counts
+
+* impl/test update
+
+* impl/test update\_posterior\_counts
+
+* impl/test predict
 
 * dynamic labels
+
+* performance

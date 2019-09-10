@@ -35,77 +35,76 @@ class MondrianTree:
         self.Nil  = Nil()
         self.root = Node(self)
 
-    def fit(self, X, y, labels):
-        self.labels = labels
-        self.Nil.set_posterior(labels)
+    def fit(self, X, y):
+        self.labels = np.unique(y)
+        self.Nil.set_posterior(self.labels)
 
         self.root.fit(X, y)
 
 class Node:
-    def __init__(self, tree):
+    def __init__(self, tree, parent = None):
         self.tree   = tree
-        self.parent = tree.Nil
+        if parent == None:
+            self.parent = tree.Nil
+        else:
+            self.parent = parent
+
+        self.time  = 0
+        self.dim   = 0
+        self.split = 0
+
+        self.lower = []
+        self.upper = []
+
+        self.left  = self.tree.Nil
+        self.right = self.tree.Nil
 
     def fit(self, X, y):
+        labels, counts = np.unique(y, return_counts = True)
+
+        if len(labels) < 2:
+            return self.to_leaf(labels, counts)
+
+        E, deltas = self.compute_E(X)
+
+        if self.parent.time + E >= self.tree.budget:
+            return self.to_leaf(labels, counts)
+
+        self.to_inner(E, deltas)
+
+        Xl, yl, Xu, yu = self.split_data(X, y)
+
+        self.left  = Node(self.tree, self)
+        self.right = Node(self.tree, self)
+
+        self.left.fit(Xl, yl)
+        self.right.fit(Xu, yu)
+
+    def to_leaf(self, labels, counts):
+        self.time = self.tree.budget
+        # self.init_posterior_counts(labels, counts)
+
+    def to_inner(self, E, deltas):
+        self.time  = self.parent.time + E
+        self.dim   = random.choice(population(deltas))
+        self.split = random.uniform(
+            self.lower[self.dim],
+            self.upper[self.dim]
+        )
+
+    def compute_E(self, X):
         self.lower, self.upper, deltas = \
             bounding_box(X, deltas = True)
 
         exp_rate = sum(self.upper - self.lower)
-        E = random.expovariate(exp_rate)
+        return random.expovariate(exp_rate), deltas
 
-        print(E)
-
-        labels, counts = np.unique(y, return_counts = True)
-
-        if self.parent.time + E >= self.tree.budget \
-                or len(labels) < 2:
-
-            # self = leaf
-            self.time = self.budget
-            self.init_posterior_count(labels, counts)
-
-        else:
-            # self = inner node
-            self.time = self.parent.time + E
-
-            min_delta, max_delta = \
-                bounding_box(deltas, axis = 0)
-
-            # normalize + expand + create population
-            # TODO: test it
-            population = []
-
-            for i, d in enum(deltas):
-                norm = (d - min_delta) \
-                     / (max_delta - min_delta)
-
-                population += [i for i in
-                    range(int(norm * 10 ** 2))]
-
-            # TODO: choose dimension proportional to
-            # self.upper[dim] - self.lower[dim]
-
-            self.dim = random.randrange(0, X.shape[1])
-
-            self.split = random.uniform(
-                self.lower[self.dim],
-                self.upper[self.dim]
-            )
-            print(self.split)
-            return
-            Xl, yl, Xu, yu = split( X, y, self.dim
-                                  , self.split )
-
-            self.left  = MondrianTree(
-                self.budget, self.discount, self
-            )
-            self.right = MondrianTree(
-                self.budget, self.discount, self
-            )
-
-            self.left.fit(Xl, yl)
-            self.right.fit(Xu, yu)
-
+    def split_data(self, X, y):
+        idxs_l, idxs_u = [], []
+        for i, x in zip(range(len(X)), X):
+            idxs_l.append(i) if x[self.dim] <= self.split \
+                else idxs_u.append(i)
+        return X[idxs_l], y[idxs_l], X[idxs_u], y[idxs_u]
 
 class Nil:
     def __init__(self):
@@ -391,9 +390,11 @@ def bounding_box(X, axis=1, deltas = False):
     if deltas: return min, max, max - min
     else: return min, max
 
-def split(X, y, dim, split):
-    idxs_l, idxs_u = [], []
-    for i, x in zip(range(len(X)), X):
-        idxs_l.append(i) if x[dim] <= split \
-            else idxs_u.append(i)
-    return X[idxs_l], y[idxs_l], X[idxs_u], y[idxs_u]
+def population(deltas):
+    delta_sum = sum(deltas)
+
+    pop = []
+    for i, d in enumerate(deltas):
+        norm = d / delta_sum
+        pop += [i for _ in range(int(norm * 10 ** 2))]
+    return pop
