@@ -17,6 +17,7 @@ y = np.array([0, 1, 0])
 def test_mondrian_tree_fit():
     t = MondrianTree(inf, 100)
     t.fit(X, y)
+
     # all the leaf nodes
     assert t.root.right.time == inf
     assert t.root.left.right.time == inf
@@ -49,6 +50,19 @@ def test_split_data():
     X_l, y_l, X_u, y_u = t.root.split_data(X, y)
     assert y_u[0] == 1
 
+def test_compute_customers():
+    t = MondrianTree(inf, 100)
+    t.labels = np.array([0, 1])
+    customers = t.root.compute_customers(np.array([1]),[3])
+
+    assert customers[0] == 0
+    assert customers[1] == 3
+
+    customers = t.root.compute_customers(np.array([]),[])
+
+    assert customers[0] == 0
+    assert customers[1] == 0
+
 def test_Nil_set_posterior():
     labels = ["test1", "test2", 0, 5]
 
@@ -60,4 +74,3 @@ def test_Nil_set_posterior():
     nil.set_posterior(np.array(labels))
 
     assert nil.posterior["0"] == 1 / 4
-

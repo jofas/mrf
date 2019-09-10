@@ -59,16 +59,22 @@ class Node:
         self.left  = self.tree.Nil
         self.right = self.tree.Nil
 
+        self.customers = None
+        self.tables    = None
+
     def fit(self, X, y):
         labels, counts = np.unique(y, return_counts = True)
 
         if len(labels) < 2:
-            return self.to_leaf(labels, counts)
+            self.time = self.tree.budget
+            self.fit_posterior_counts(labels, counts)
+            return
 
         E, deltas = self.compute_E(X)
 
         if self.parent.time + E >= self.tree.budget:
-            return self.to_leaf(labels, counts)
+            self.time = self.tree.budget
+            self.fit_posterior_counts(labels, counts)
 
         self.to_inner(E, deltas)
 
@@ -80,9 +86,22 @@ class Node:
         self.left.fit(Xl, yl)
         self.right.fit(Xu, yu)
 
-    def to_leaf(self, labels, counts):
-        self.time = self.tree.budget
-        # self.init_posterior_counts(labels, counts)
+    def fit_posterior_counts(self, labels, counts):
+        if self.time == self.tree.budget:
+            self.customers = \
+                self.compute_customers(labels, counts)
+        else:
+            pass
+
+    def compute_customers(self, labels, counts):
+        d = {}
+        for l in self.tree.labels:
+            idx, = np.where(labels == l)
+            if len(idx) == 1:
+                d[l] = counts[idx[0]]
+            else:
+                d[l] = 0
+        return d
 
     def to_inner(self, E, deltas):
         self.time  = self.parent.time + E
