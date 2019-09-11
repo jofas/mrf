@@ -86,14 +86,29 @@ class Node:
         self.left.fit(Xl, yl)
         self.right.fit(Xu, yu)
 
-    def fit_posterior_counts(self, labels, counts):
+    def fit_posterior_counts(
+        self, labels = None, counts = None
+    ):
         if self.time == self.tree.budget:
             self.customers = \
-                self.compute_customers(labels, counts)
+                self.compute_customers_leaf(labels, counts)
         else:
-            pass
+            self.customers = self.compute_customers_inner()
 
-    def compute_customers(self, labels, counts):
+        self.tables = { l : min(c, 1)
+            for l, c in self.customers.items() }
+
+        self.parent.fit_posterior_counts()
+
+    def compute_customers_inner(self):
+        if self.right.tables == None:
+            return self.left.tables
+        else:
+            return { l : self.left.tables[l]
+                + self.right.tables[l]
+                    for l in self.tree.labels }
+
+    def compute_customers_leaf(self, labels, counts):
         d = {}
         for l in self.tree.labels:
             idx, = np.where(labels == l)
@@ -114,7 +129,6 @@ class Node:
     def compute_E(self, X):
         self.lower, self.upper, deltas = \
             bounding_box(X, deltas = True)
-
         exp_rate = sum(self.upper - self.lower)
         return random.expovariate(exp_rate), deltas
 
@@ -133,6 +147,22 @@ class Nil:
     def set_posterior(self, labels):
         self.posterior = {l : 1 / len(labels)
             for l in labels}
+
+    def fit_posterior_counts(self): return
+
+def bounding_box(X, axis=0, deltas = False):
+    min, max = X.min(axis = axis), X.max(axis = axis)
+    if deltas: return min, max, max - min
+    else: return min, max
+
+def population(deltas):
+    delta_sum = sum(deltas)
+
+    pop = []
+    for i, d in enumerate(deltas):
+        norm = d / delta_sum
+        pop += [i for _ in range(int(norm * 10 ** 2))]
+    return pop
 
 """{{{
 class MondrianTree:
@@ -404,16 +434,3 @@ class Nil:
             for label in Nil.labels }
 }}}"""
 
-def bounding_box(X, axis=1, deltas = False):
-    min, max = X.min(axis = axis), X.max(axis = axis)
-    if deltas: return min, max, max - min
-    else: return min, max
-
-def population(deltas):
-    delta_sum = sum(deltas)
-
-    pop = []
-    for i, d in enumerate(deltas):
-        norm = d / delta_sum
-        pop += [i for _ in range(int(norm * 10 ** 2))]
-    return pop

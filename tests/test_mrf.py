@@ -14,16 +14,23 @@ X = np.array([[0.0, 1.0, 2.0],
 
 y = np.array([0, 1, 0])
 
-def test_mondrian_tree_fit():
-    t = MondrianTree(inf, 100)
-    t.fit(X, y)
+T = MondrianTree(inf, 100)
+T.fit(X, y)
 
-    # all the leaf nodes
-    assert t.root.right.time == inf
-    assert t.root.left.right.time == inf
-    assert t.root.left.left.right.right.time == inf
-    assert t.root.left.left.right.left.time == inf
-    assert t.root.left.left.left.time == inf
+def test_mondrian_tree_fit():
+    assert T.root.right.time == inf
+    assert T.root.left.right.time == inf
+    assert T.root.left.left.time == inf
+
+def test_posterior_counts():
+    assert T.root.left.left.customers == {0: 1, 1: 0}
+    assert T.root.left.right.customers == {0: 0, 1: 1}
+    assert T.root.right.customers == {0: 1, 1: 0}
+
+    assert T.root.left.customers == {0: 1, 1: 1}
+    assert T.root.customers == {0: 2, 1: 1}
+
+    assert T.root.tables == {0: 1, 1: 1}
 
 def test_bounding_box():
     min, max = bounding_box(X)
@@ -50,15 +57,19 @@ def test_split_data():
     X_l, y_l, X_u, y_u = t.root.split_data(X, y)
     assert y_u[0] == 1
 
-def test_compute_customers():
+def test_compute_customers_leaf():
     t = MondrianTree(inf, 100)
     t.labels = np.array([0, 1])
-    customers = t.root.compute_customers(np.array([1]),[3])
+    customers = t.root.compute_customers_leaf(
+        np.array([1]), [3]
+    )
 
     assert customers[0] == 0
     assert customers[1] == 3
 
-    customers = t.root.compute_customers(np.array([]),[])
+    customers = t.root.compute_customers_leaf(
+        np.array([]), []
+    )
 
     assert customers[0] == 0
     assert customers[1] == 0
