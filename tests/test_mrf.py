@@ -22,6 +22,16 @@ def test_mondrian_tree_fit():
     assert T.root.left.right.time == inf
     assert T.root.left.left.time == inf
 
+def test_mondrian_tree_update():
+    pass
+
+def test_compute_posterior_distribution():
+    assert sum(T.Nil.posterior.values()) == 1.0
+    assert sum(T.root.right.posterior.values()) == 1.0
+    assert sum(T.root.left.posterior.values()) == 1.0
+    assert sum(T.root.left.right.posterior.values()) == 1.0
+    assert sum(T.root.left.left.posterior.values()) == 1.0
+
 def test_posterior_counts():
     assert T.root.left.left.customers == {0: 1, 1: 0}
     assert T.root.left.right.customers == {0: 0, 1: 1}

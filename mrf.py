@@ -40,6 +40,7 @@ class MondrianTree:
         self.Nil.set_posterior(self.labels)
 
         self.root.fit(X, y)
+        self.root.compute_posterior_distribution()
 
 class Node:
     def __init__(self, tree, parent = None):
@@ -61,6 +62,30 @@ class Node:
 
         self.customers = None
         self.tables    = None
+
+        self.posterior = {}
+
+    def compute_posterior_distribution(self):
+        d = math.exp(-self.tree.discount
+            * (self.time - self.parent.time))
+
+        customer_sum = sum(self.customers.values())
+        table_sum = sum(self.tables.values())
+
+        if customer_sum == 0:
+            self.posterior = self.parent.posterior
+        else:
+            for label in self.customers:
+                self.posterior[label] = \
+                    1 / customer_sum * (
+                          self.customers[label]
+                        - d * self.tables[label]
+                        + d * table_sum
+                        * self.parent.posterior[label]
+                    )
+
+        self.left.compute_posterior_distribution()
+        self.right.compute_posterior_distribution()
 
     def fit(self, X, y):
         labels, counts = np.unique(y, return_counts = True)
@@ -147,6 +172,8 @@ class Nil:
     def set_posterior(self, labels):
         self.posterior = {l : 1 / len(labels)
             for l in labels}
+
+    def compute_posterior_distribution(self): return
 
     def fit_posterior_counts(self): return
 
