@@ -5,6 +5,8 @@ import numpy as np
 from infinity import inf
 from scipy.stats import truncexpon
 
+# TODO
+"""
 class MondrianRandomForest:
     def __init__( self, n_estimators = 10, budget=inf
                 , discount = 100 ):
@@ -15,7 +17,6 @@ class MondrianRandomForest:
     def fit(self, X, y):
         for e in self.estimators:
             e.fit(X, y)
-            e.compute_posterior_distribution()
 
     def update(self, X, y):
         pass
@@ -25,6 +26,7 @@ class MondrianRandomForest:
 
     def score(self, X, y):
         pass
+"""
 
 class MondrianTree:
     def __init__(self, budget, discount):
@@ -40,6 +42,11 @@ class MondrianTree:
         self.Nil.set_posterior(self.labels)
 
         self.root.fit(X, y)
+        self.root.compute_posterior_distribution()
+
+    def update(self, X, y):
+        for x_, y_ in zip(X, y):
+            self.root.update(x_, y_)
         self.root.compute_posterior_distribution()
 
 class Node:
@@ -65,6 +72,93 @@ class Node:
 
         self.posterior = {}
 
+    def fit(self, X, y):
+        labels, counts = np.unique(y, return_counts = True)
+
+        self.lower, self.upper, deltas = \
+            bounding_box(X, deltas = True)
+
+        exp_rate = sum(self.upper - self.lower)
+        if exp_rate == 0: E = inf
+        else: E = random.expovariate(exp_rate)
+
+        if self.parent.time + E >= self.tree.budget \
+                or len(labels) == 1:
+            self.time = self.tree.budget
+            self.fit_posterior_counts(labels, counts)
+            return
+
+        self.to_inner(E, deltas)
+
+        Xl, yl, Xu, yu = self.split_data(X, y)
+
+        self.left  = Node(self.tree, self)
+        self.right = Node(self.tree, self)
+
+        self.left.fit(Xl, yl)
+        self.right.fit(Xu, yu)
+
+    def update(self, x, y):
+        zero_vec = np.zeros(x.shape)
+
+        # el = eu = zero_vec if x in bounding box
+        el = np.maximum(self.lower - x, zero_vec)
+        eu = np.maximum(x - self.upper, zero_vec)
+
+        exp_rate = sum(el + eu)
+        if exp_rate == 0: E = inf
+        else: E = random.expovariate(exp_rate)
+
+        if self.parent.time + E >= self.time \
+                or (sum(self.tables.values()) == 1
+                    and self.tables[y] == 1):
+
+            # extend
+            self.lower = np.minimum(self.lower, x)
+            self.upper = np.maximum(self.upper, x)
+
+            if self.time != self.tree.budget:
+                if x[self.dim] <= self.split:
+                    self.left.update(x, y)
+                else:
+                    self.right.update(x, y)
+            else:
+                self.update_posterior_counts(y)
+        else:
+
+            # insert parent node
+            dim = random.choice(population(el + eu))
+            if x[dim] > self.upper[dim]:
+                split = \
+                    random.uniform(self.upper[dim], x[dim])
+            else:
+                split = \
+                    random.uniform(x[dim], self.lower[dim])
+
+            new_parent = Node(self.tree, self.parent)
+            new_parent.dim = dim
+            new_parent.split = split
+            new_parent.time = self.parent.time + E
+            new_parent.lower = np.minimum(self.lower, x)
+            new_parent.upper = np.maximum(self.upper, x)
+
+            new_child = Node(self.tree, new_parent)
+
+            if self == self.parent.left:
+                self.parent.left = new_parent
+            else:
+                self.parent.right = new_parent
+
+            if x[dim] <= split:
+                new_parent.left = new_child
+                new_parent.right = self
+            else:
+                new_parent.left = self
+                new_parent.right = new_child
+
+            self.parent = new_parent
+            new_child.fit(x.reshape(1,-1), y)
+
     def compute_posterior_distribution(self):
         d = math.exp(-self.tree.discount
             * (self.time - self.parent.time))
@@ -87,30 +181,6 @@ class Node:
         self.left.compute_posterior_distribution()
         self.right.compute_posterior_distribution()
 
-    def fit(self, X, y):
-        labels, counts = np.unique(y, return_counts = True)
-
-        if len(labels) < 2:
-            self.time = self.tree.budget
-            self.fit_posterior_counts(labels, counts)
-            return
-
-        E, deltas = self.compute_E(X)
-
-        if self.parent.time + E >= self.tree.budget:
-            self.time = self.tree.budget
-            self.fit_posterior_counts(labels, counts)
-
-        self.to_inner(E, deltas)
-
-        Xl, yl, Xu, yu = self.split_data(X, y)
-
-        self.left  = Node(self.tree, self)
-        self.right = Node(self.tree, self)
-
-        self.left.fit(Xl, yl)
-        self.right.fit(Xu, yu)
-
     def fit_posterior_counts(
         self, labels = None, counts = None
     ):
@@ -124,6 +194,19 @@ class Node:
             for l, c in self.customers.items() }
 
         self.parent.fit_posterior_counts()
+
+    def update_posterior_counts(self, y = None):
+        if self.time == self.tree.budget:
+            self.customers[y] += 1
+        else:
+            self.customers[y] = self.left.tables[y] \
+                              + self.right.tables[y]
+
+        if self.tables[y] == 1: return
+
+        self.tables[y] = min(self.customers[y], 1)
+
+        self.parent.update_posterior_counts()
 
     def compute_customers_inner(self):
         if self.right.tables == None:
@@ -147,15 +230,8 @@ class Node:
         self.time  = self.parent.time + E
         self.dim   = random.choice(population(deltas))
         self.split = random.uniform(
-            self.lower[self.dim],
-            self.upper[self.dim]
+            self.lower[self.dim], self.upper[self.dim]
         )
-
-    def compute_E(self, X):
-        self.lower, self.upper, deltas = \
-            bounding_box(X, deltas = True)
-        exp_rate = sum(self.upper - self.lower)
-        return random.expovariate(exp_rate), deltas
 
     def split_data(self, X, y):
         idxs_l, idxs_u = [], []
@@ -460,4 +536,3 @@ class Nil:
         Nil.posterior = { label: 1 / len(Nillabels)
             for label in Nil.labels }
 }}}"""
-

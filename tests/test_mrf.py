@@ -1,4 +1,4 @@
-from mrf import MondrianRandomForest, MondrianTree, Nil
+from mrf import MondrianTree, Nil
 from mrf import bounding_box, population
 
 import numpy as np
@@ -22,9 +22,6 @@ def test_mondrian_tree_fit():
     assert T.root.left.right.time == inf
     assert T.root.left.left.time == inf
 
-def test_mondrian_tree_update():
-    pass
-
 def test_compute_posterior_distribution():
     assert sum(T.Nil.posterior.values()) == 1.0
     assert sum(T.root.right.posterior.values()) == 1.0
@@ -32,7 +29,7 @@ def test_compute_posterior_distribution():
     assert sum(T.root.left.right.posterior.values()) == 1.0
     assert sum(T.root.left.left.posterior.values()) == 1.0
 
-def test_posterior_counts():
+def test_fit_posterior_counts():
     assert T.root.left.left.customers == {0: 1, 1: 0}
     assert T.root.left.right.customers == {0: 0, 1: 1}
     assert T.root.right.customers == {0: 1, 1: 0}
@@ -41,6 +38,35 @@ def test_posterior_counts():
     assert T.root.customers == {0: 2, 1: 1}
 
     assert T.root.tables == {0: 1, 1: 1}
+
+def test_mondrian_tree_update():
+    T.update(np.array([[-1.0, -1.0, -1.0]]), np.array([1]))
+
+    assert T.root.left.left.right.time == inf
+    assert T.root.left.left.left.time == inf
+
+def test_update_posterior_counts():
+    assert T.root.left.left.left.customers == {0: 0, 1: 1}
+
+    assert T.root.left.left.right.customers == {0: 1, 1: 0}
+
+    assert T.root.left.left.customers == {0: 1, 1: 1}
+
+    assert T.root.left.right.customers == {0: 0, 1: 1}
+
+    assert T.root.left.customers == {0: 1, 1: 2}
+    assert T.root.left.tables == {0: 1, 1: 1}
+
+    assert T.root.right.customers == {0: 1, 1: 0}
+
+    assert T.root.customers == {0: 2, 1: 1}
+    assert T.root.tables == {0: 1, 1: 1}
+
+def test_mondrian_tree_paused_update():
+    T.update(np.array([[-0.5, -0.5, -1.0]]), np.array([1]))
+    assert T.root.left.left.left.customers[1] == 2
+    assert list(T.root.left.left.left.upper) \
+        == [-0.5, -0.5, -1.0]
 
 def test_bounding_box():
     min, max = bounding_box(X)
