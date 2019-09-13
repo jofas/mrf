@@ -4,8 +4,12 @@ Mondrian Random Forest
 
 ## TODO
 
-* impl/test predict
+* impl MondrianRandomForest
 
-* dynamic labels
+* recursion -> stack worker
+
+* catch faulty input (integration tests)
 
 * performance
+
+* dynamic labels
